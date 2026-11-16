@@ -90,6 +90,31 @@ def list_servers(db: Session = Depends(get_db)):
     return db.scalars(statement).all()
 
 
+@app.get("/api/servers/logs")
+def get_all_server_logs(
+    db: Session = Depends(get_db),
+):
+    logs = (
+        db.query(HealthCheckLog)
+        .order_by(HealthCheckLog.created_at.desc())
+        .limit(200)
+        .all()
+    )
+
+    return [
+        {
+            "id": log.id,
+            "server_id": log.server_id,
+            "time": log.created_at.strftime("%H:%M:%S"),
+            "level": log.level,
+            "source": log.source,
+            "message": log.message,
+        }
+        for log in reversed(logs)
+    ]
+
+
+
 @app.get("/api/servers/{server_id}", response_model=ServerResponse)
 def get_server(server_id: int, db: Session = Depends(get_db)):
     statement = (
@@ -324,6 +349,8 @@ def trigger_use_case(
             db.commit()
 
         raise
+
+
 
 
 @app.get("/api/servers/{server_id}/logs")

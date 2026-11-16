@@ -1,4 +1,12 @@
-import { ShieldCheck, LayoutDashboard, FileCode, Activity } from "lucide-react";
+
+import {
+  ShieldCheck,
+  LayoutDashboard,
+  FileCode,
+  Activity,
+} from "lucide-react";
+
+import { NavLink } from "react-router-dom";
 
 function Navbar() {
   return (
@@ -15,20 +23,29 @@ function Navbar() {
       </div>
 
       <div className="nav-links">
-        <a className="active" href="/dashboard">
+        <NavLink
+          to="/dashboard"
+          className={({ isActive }) => isActive ? "active" : ""}
+        >
           <LayoutDashboard size={17} />
           Dashboard
-        </a>
+        </NavLink>
 
-        <a href="/scripts">
+        <NavLink
+          to="/scripts"
+          className={({ isActive }) => isActive ? "active" : ""}
+        >
           <FileCode size={17} />
           Scripts
-        </a>
+        </NavLink>
 
-        <a href="/activity">
+        <NavLink
+          to="/activity"
+          className={({ isActive }) => isActive ? "active" : ""}
+        >
           <Activity size={17} />
           Activity
-        </a>
+        </NavLink>
       </div>
 
       <div className="nav-status">

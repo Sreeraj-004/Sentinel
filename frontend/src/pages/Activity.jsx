@@ -5,67 +5,13 @@ import ServerStats from "../components/ServerStats";
 import SystemConsole from "../components/SystemConsole";
 import { fetchServers } from "../services/serverService";
 
-const activityLogs = [
-  {
-    id: 1,
-    time: "17:02:41",
-    level: "INFO",
-    source: "SENTINEL",
-    message: "Infrastructure monitoring cycle started.",
-  },
-  {
-    id: 2,
-    time: "17:02:43",
-    level: "INFO",
-    source: "SNTL-WEB-01",
-    message: "CPU utilization: 42%. Memory utilization: 61%.",
-  },
-  {
-    id: 3,
-    time: "17:02:45",
-    level: "WARNING",
-    source: "SNTL-DB-01",
-    message: "Disk utilization reached 87%. Resource pressure detected.",
-  },
-  {
-    id: 4,
-    time: "17:02:46",
-    level: "ALERT",
-    source: "SNTL-DB-01",
-    message: "Disk utilization is approaching the critical threshold.",
-  },
-  {
-    id: 5,
-    time: "17:02:48",
-    level: "INFO",
-    source: "SENTINEL",
-    message: "Historical resource trend analysis initiated.",
-  },
-  {
-    id: 6,
-    time: "17:02:50",
-    level: "SUCCESS",
-    source: "SNTL-APP-02",
-    message: "All monitored application services are running.",
-  },
-  {
-    id: 7,
-    time: "17:02:52",
-    level: "WARNING",
-    source: "SNTL-FILE-01",
-    message: "One monitored service is currently stopped.",
-  },
-  {
-    id: 8,
-    time: "17:02:55",
-    level: "INFO",
-    source: "SENTINEL",
-    message: "Monitoring cycle completed.",
-  },
-];
+const API_URL = "http://127.0.0.1:8000/api/servers";
+const LOG_POLL_INTERVAL = 500;
 
 function Activity() {
   const [servers, setServers] = useState([]);
+  const [logs, setLogs] = useState([]);
+  const [logError, setLogError] = useState("");
 
   const loadServers = useCallback(async () => {
     try {
@@ -76,6 +22,7 @@ function Activity() {
     }
   }, []);
 
+  // Load server statistics.
   useEffect(() => {
     loadServers();
 
@@ -83,6 +30,89 @@ function Activity() {
 
     return () => clearInterval(interval);
   }, [loadServers]);
+
+  // Fetch historical logs and continuously poll for new events.
+  useEffect(() => {
+    let isActive = true;
+    let isFetching = false;
+    let initialized = false;
+
+    const seenLogIds = new Set();
+
+    setLogs([]);
+    setLogError("");
+
+    async function fetchLogs() {
+      if (!isActive || isFetching) return;
+
+      isFetching = true;
+
+      try {
+        // Fetch logs from all servers.
+        const response = await fetch(`${API_URL}/logs`);
+
+        if (!response.ok) {
+          throw new Error("Unable to retrieve activity logs.");
+        }
+
+        const data = await response.json();
+
+        if (!isActive) return;
+
+        // Sort logs by ID.
+        const orderedLogs = [...data].sort(
+          (a, b) => a.id - b.id
+        );
+
+        if (!initialized) {
+          // Store all historical logs on initial load.
+          orderedLogs.forEach((log) => seenLogIds.add(log.id));
+
+          setLogs(orderedLogs);
+          initialized = true;
+        } else {
+          // Identify logs that have not been displayed yet.
+          const newLogs = orderedLogs.filter(
+            (log) => !seenLogIds.has(log.id)
+          );
+
+          if (newLogs.length > 0) {
+            newLogs.forEach((log) => seenLogIds.add(log.id));
+
+            // Append only new logs.
+            setLogs((previousLogs) => [
+              ...previousLogs,
+              ...newLogs,
+            ]);
+          }
+        }
+
+        setLogError("");
+      } catch (error) {
+        if (isActive) {
+          setLogError(
+            error.message || "Unable to connect to monitoring API."
+          );
+        }
+      } finally {
+        isFetching = false;
+      }
+    }
+
+    // Fetch historical logs immediately.
+    fetchLogs();
+
+    // Poll for new logs every 500ms.
+    const pollingInterval = setInterval(
+      fetchLogs,
+      LOG_POLL_INTERVAL
+    );
+
+    return () => {
+      isActive = false;
+      clearInterval(pollingInterval);
+    };
+  }, []);
 
   return (
     <main className="dashboard activity-page">
@@ -95,20 +125,27 @@ function Activity() {
           </p>
         </div>
 
-        {/* <div className="activity-live">
+        <div className="activity-live">
           <span className="status-dot" />
-          Demo Log Stream
-        </div> */}
+          Live Event Stream
+        </div>
       </section>
 
       <ServerStats servers={servers} />
 
       <SystemConsole
-        logs={activityLogs}
-        title="Sentinel System Console"
-        subtitle="EVENT LOGS"
-        live={true}
+        logs={logs}
+        title="Infrastructure - System Console"
+        subtitle="LIVE SYSTEM HEALTH EVENTS"
+        live={!logError}
+        maxHeight={400}
       />
+
+      {logError && (
+        <p className="health-check-message">
+          {logError}
+        </p>
+      )}
     </main>
   );
 }
